@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: mcqgenerator
+Version: 0.1
+Author: Rajat Pandey
+Requires-Dist: google-generativeai
+Requires-Dist: langchain
+Requires-Dist: langchain-community
+Requires-Dist: langchain-google-genai
+Requires-Dist: streamlit
+Requires-Dist: python-dotenv
+Requires-Dist: PyPDF2
+Dynamic: author
+Dynamic: requires-dist
