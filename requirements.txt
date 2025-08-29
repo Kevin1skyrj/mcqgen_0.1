@@ -1,0 +1,17 @@
+# Core LLM/Gemini
+google-generativeai
+
+# LangChain core and integrations for Gemini
+langchain
+langchain-community
+langchain-google-genai
+
+# App framework
+streamlit
+
+# Config management
+python-dotenv
+
+# PDF processing (modern replacement for PyPDF/PyPDF2)
+PyPDF2
+
