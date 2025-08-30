@@ -77,6 +77,111 @@ with open('Response.json', 'r') as file:
 #creating a title for the app
 st.title("MCQs Creator Application with LangChain 🦜⛓️")
 
+# small CSS to make MCQ cards look nicer
+st.markdown(
+    """
+    <style>
+    .mcq-card { background: linear-gradient(180deg,#ffffff,#f7fbff); padding:64px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.08); margin-bottom:12px;}
+    .mcq-qnum { font-weight:700; color:#0b57d0; }
+    .mcq-question { font-size:16px; margin-top:6px; margin-bottom:8px; }
+    .mcq-choice { padding:10px 10px; border-radius:8px; margin:6px 0; background:#ffffff; border:1px solid #dbeefb; color:#0b2540 }
+    .mcq-choice:hover { background:#eef8ff; }
+    .mcq-choice.selected { background:#e6f7ff; border-color:#8ed0ff }
+    .mcq-correct { color: #076f07; font-weight:600 }
+    .mcq-wrong { color: #a10b0b; font-weight:600 }
+    /* make the main block use full width */
+    .block-container{max-width:100% !important; padding:1rem 2rem !important}
+    .mcq-section { width: 100%; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+def _parse_choices(choices_field):
+    """Parse a choices field produced by get_table_data into a list of (label, text).
+    Supports either a list of tuples, or a string like 'a-> one || b-> two'."""
+    if isinstance(choices_field, list):
+        return choices_field
+    s = str(choices_field or "")
+    parts = [p.strip() for p in s.split('||') if p.strip()]
+    out = []
+    for p in parts:
+        if '->' in p:
+            lbl, txt = [x.strip() for x in p.split('->', 1)]
+            out.append((lbl, txt))
+        else:
+            out.append(("", p))
+    return out
+
+def _render_static_cards(table_data):
+    for i, item in enumerate(table_data, start=1):
+        q = item.get('MCQ', '')
+        choices = _parse_choices(item.get('Choices', ''))
+        correct = item.get('Correct', '')
+        st.markdown(f"<div class='mcq-card'>", unsafe_allow_html=True)
+        st.markdown(f"<div class='mcq-qnum'>Question {i}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='mcq-question'>{q}</div>", unsafe_allow_html=True)
+        for lbl, txt in choices:
+            st.markdown(f"<div class='mcq-choice'><strong>{lbl}</strong>&nbsp;{txt}</div>", unsafe_allow_html=True)
+        with st.expander("Show answer"):
+            st.markdown(f"<div class='mcq-correct'>Answer: {correct}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+def _render_interactive_quiz(table_data):
+    # render radio buttons and allow submission/auto-grading
+    st.write("### Interactive quiz")
+    # create keys and radios
+    for i, item in enumerate(table_data, start=1):
+        q = item.get('MCQ', '')
+        choices = _parse_choices(item.get('Choices', ''))
+        options = [f"{lbl}) {txt}" if lbl else txt for lbl, txt in choices]
+        key = f"mcq_ans_{i}"
+        # set a default empty selection if not present
+        if key not in st.session_state:
+            st.session_state[key] = None
+        st.markdown(f"**{i}. {q}**")
+        st.radio(label=f"", options=options, key=key, index=0)
+
+    if st.button("Submit Answers"):
+        score = 0
+        total = len(table_data)
+        for i, item in enumerate(table_data, start=1):
+            key = f"mcq_ans_{i}"
+            selected = st.session_state.get(key)
+            choices = _parse_choices(item.get('Choices', ''))
+            correct_label = str(item.get('Correct', '')).strip()
+            # find the canonical correct option text
+            correct_text = None
+            for lbl, txt in choices:
+                if lbl and lbl.strip().lower() == correct_label.lower():
+                    correct_text = f"{lbl}) {txt}"
+                    break
+                if txt.strip().lower() == correct_label.lower():
+                    correct_text = f"{lbl}) {txt}"
+                    break
+            if selected and correct_text and selected.strip() == correct_text.strip():
+                score += 1
+
+        st.success(f"You scored {score} / {total}")
+        # show per-question answers
+        for i, item in enumerate(table_data, start=1):
+            key = f"mcq_ans_{i}"
+            selected = st.session_state.get(key)
+            choices = _parse_choices(item.get('Choices', ''))
+            correct_label = str(item.get('Correct', '')).strip()
+            correct_text = ''
+            for lbl, txt in choices:
+                if lbl and lbl.strip().lower() == correct_label.lower():
+                    correct_text = f"{lbl}) {txt}"
+                    break
+            st.markdown(f"**{i}. {item.get('MCQ','')}**")
+            if selected and selected.strip() == correct_text.strip():
+                st.markdown(f"<div class='mcq-correct'>Your answer: {selected} — Correct</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div class='mcq-wrong'>Your answer: {selected or 'No answer'} — Correct: {correct_text}</div>", unsafe_allow_html=True)
+
+
+
 #Create a form using st.form
 with st.form("user_inputs"):
     #File Upload
@@ -166,16 +271,27 @@ with st.form("user_inputs"):
                         if quiz_parsed is not None:
                             table_data = get_table_data(quiz_parsed)
 
+                        # store result in session state and render outside the form
                         if table_data and isinstance(table_data, list):
-                            try:
-                                df = pd.DataFrame(table_data)
-                                df.index = df.index + 1
-                                st.table(df)
-                            except Exception as e:
-                                st.error(f"Failed to create DataFrame: {e}")
+                            st.session_state['last_table_data'] = table_data
+                            st.session_state['show_mcqs'] = True
                         else:
+                            st.session_state['last_table_data'] = None
+                            st.session_state['show_mcqs'] = False
                             st.error("Unable to parse quiz into table rows.")
 
                 else:
                     # unexpected non-dict response from chain; do not display provider output in UI
                     st.error("Generation completed but returned unexpected response format.")
+
+# Render generated MCQs outside the form so the form doesn't expand
+if st.session_state.get('show_mcqs'):
+    table_data = st.session_state.get('last_table_data', [])
+    st.markdown("<div class='mcq-section'>", unsafe_allow_html=True)
+    try:
+        _render_static_cards(table_data)
+        if st.button("Take interactive quiz", key='take_quiz_outside'):
+            _render_interactive_quiz(table_data)
+    except Exception as e:
+        st.error(f"Failed to render MCQs: {e}")
+    st.markdown("</div>", unsafe_allow_html=True)
