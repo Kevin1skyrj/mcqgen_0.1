@@ -46,7 +46,11 @@ def get_table_data(quiz_str):
         # iterate over the quiz dictionary and extract the required information
         for key, value in quiz_dict.items():
             # guard against missing keys and different shapes
-            mcq = value.get("mcq") or value.get("question") or str(value)
+            mcq = (value.get("mcq") or value.get("question") or "").strip()
+
+            # skip entries without a usable question
+            if not mcq:
+                continue
 
             options_obj = value.get("options", {})
             # support options as dict (a: text) or list [opt1, opt2, ...]

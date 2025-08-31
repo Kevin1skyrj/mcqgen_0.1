@@ -81,17 +81,21 @@ st.title("MCQs Creator Application with LangChain 🦜⛓️")
 st.markdown(
     """
     <style>
-    .mcq-card { background: linear-gradient(180deg,#ffffff,#f7fbff); padding:64px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.08); margin-bottom:12px;}
+    .mcq-card { background: linear-gradient(180deg,#ffffff,#f7fbff); padding:16px; border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,0.08); margin-bottom:12px; color: #0b2540 !important; }
     .mcq-qnum { font-weight:700; color:#0b57d0; }
-    .mcq-question { font-size:16px; margin-top:6px; margin-bottom:8px; }
-    .mcq-choice { padding:10px 10px; border-radius:8px; margin:6px 0; background:#ffffff; border:1px solid #dbeefb; color:#0b2540 }
+    .mcq-question { font-size:16px; margin-top:6px; margin-bottom:8px; color: #0b2540 !important; }
+    .mcq-choice { padding:10px 10px; border-radius:8px; margin:6px 0; background:#ffffff; border:1px solid #dbeefb; color:#0b2540 !important }
     .mcq-choice:hover { background:#eef8ff; }
     .mcq-choice.selected { background:#e6f7ff; border-color:#8ed0ff }
     .mcq-correct { color: #076f07; font-weight:600 }
     .mcq-wrong { color: #a10b0b; font-weight:600 }
+    .mcq-card details summary { cursor: pointer; color: #0b2540 !important; font-weight:600 }
+    .mcq-card details div { color: #0b2540 !important }
     /* make the main block use full width */
     .block-container{max-width:100% !important; padding:1rem 2rem !important}
     .mcq-section { width: 100%; }
+    /* override Streamlit h1 padding (increase top padding to 3rem) */
+    .st-emotion-cache-18tdrd9 h1 { font-size: 2.75rem; font-weight: 700; padding: 3rem 0px 1rem; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -114,18 +118,24 @@ def _parse_choices(choices_field):
     return out
 
 def _render_static_cards(table_data):
-    for i, item in enumerate(table_data, start=1):
-        q = item.get('MCQ', '')
-        choices = _parse_choices(item.get('Choices', ''))
-        correct = item.get('Correct', '')
-        st.markdown(f"<div class='mcq-card'>", unsafe_allow_html=True)
-        st.markdown(f"<div class='mcq-qnum'>Question {i}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='mcq-question'>{q}</div>", unsafe_allow_html=True)
-        for lbl, txt in choices:
-            st.markdown(f"<div class='mcq-choice'><strong>{lbl}</strong>&nbsp;{txt}</div>", unsafe_allow_html=True)
-        with st.expander("Show answer"):
-            st.markdown(f"<div class='mcq-correct'>Answer: {correct}</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        for i, item in enumerate(table_data, start=1):
+                q = item.get('MCQ', '')
+                choices = _parse_choices(item.get('Choices', ''))
+                correct = item.get('Correct', '')
+                # build a single HTML block for the entire card to avoid stray empty blocks
+                choices_html = '\n'.join([f"<div class='mcq-choice'><strong>{lbl}</strong>&nbsp;{txt}</div>" for lbl, txt in choices])
+                card_html = f"""
+                <div class='mcq-card'>
+                    <div class='mcq-qnum'>Question {i}</div>
+                    <div class='mcq-question'>{q}</div>
+                    {choices_html}
+                    <details style='margin-top:8px; padding-top:6px; border-top:1px dashed #e6eef9'>
+                        <summary>Show answer</summary>
+                        <div class='mcq-correct' style='margin-top:6px'>Answer: {correct}</div>
+                    </details>
+                </div>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
 
 def _render_interactive_quiz(table_data):
     # render radio buttons and allow submission/auto-grading
@@ -273,7 +283,9 @@ with st.form("user_inputs"):
 
                         # store result in session state and render outside the form
                         if table_data and isinstance(table_data, list):
-                            st.session_state['last_table_data'] = table_data
+                            # remove empty questions
+                            filtered = [t for t in table_data if (t.get('MCQ') or '').strip()]
+                            st.session_state['last_table_data'] = filtered
                             st.session_state['show_mcqs'] = True
                         else:
                             st.session_state['last_table_data'] = None
